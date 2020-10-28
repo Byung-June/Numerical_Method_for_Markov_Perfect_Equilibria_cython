@@ -90,6 +90,7 @@ transitionMatrices = [transitionMatrix(s) for s in range(num_states)]
 
 equilibrium = dsSolve(
         payoffMatrices, transitionMatrices, discountFactors=0.95, 
+        implementationType='ct', 
         showProgress=True, plotPath=True)
 
 # Dynamic stochastic game with 24 states, 2 players and 312 actions,

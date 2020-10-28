@@ -8,7 +8,7 @@ payoffMatrices = [np.array([[[5, 0],
                              [4, 2]],
                             [[5, 4],
                              [0, 2]]])]
-equilibrium = dsSolve(payoffMatrices)
+equilibrium = dsSolve(payoffMatrices, implementationType='ct')
 
 print(np.round(equilibrium['strategies'],3))
 # array([[[0. 1.] 

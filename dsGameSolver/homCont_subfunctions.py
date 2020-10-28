@@ -1,8 +1,8 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 
 """
 dsGameSolver: Computing Markov perfect equilibria of dynamic stochastic games.
-Copyright (C) 2019  Steffen Eibelshäuser & David Poensgen
+Copyright (C) 2018-2020  Steffen Eibelshäuser & David Poensgen
 
 This program is free software: you can redistribute it 
 and/or modify it under the terms of the MIT License.
@@ -14,6 +14,7 @@ and/or modify it under the terms of the MIT License.
 
 
 import numpy as np
+import sys
 
 
 
@@ -35,10 +36,16 @@ def J_pinv(Q, R):
 def deflate(ds, ds_defl=0.5):
     return ds * ds_defl
 
-def inflate(ds, corr_steps, corr_dist_tot, corr_contr_init, ds_infl=1.2, ds_max=1000):
-    ## optional: step size inflation based on accuracy of predictor step
+def inflate(ds, corr_steps, corr_dist_tot, corr_contr_init, t, t_target=np.inf, t_diff=np.inf, ds_infl=1.2, ds_max=1000):
+    ## optional: implement step size inflation based on accuracy of predictor step
+    ## this version: 
+        ## keep ds if at least 10 corrector steps were needed
+        ## inflate ds if less than 10 corrector steps were needed
+            ## cap inflation at ds_max
+            ## cap inflation at |(t_target-t)/t_diff| to avoid t_new too far beyond t_target, where
+                ## |(t_target-t)/t_diff| extrapolates recent change in t
     if corr_steps < 10:
-        return min([ds_infl*ds, ds_max])
+        return min([ds_infl*ds, ds_max, np.abs((t_target-t)/t_diff)])
     else:
         return ds
 
@@ -47,25 +54,34 @@ def inflate(ds, corr_steps, corr_dist_tot, corr_contr_init, ds_infl=1.2, ds_max=
 
 def sign_testBifurcation(sign, tangent, angle, J_y, detJ_y_old, bifurc_angle_min=175, progress=False):
     
+    sign_swapped = False
     detJ_y = np.linalg.det(np.vstack([J_y, tangent]))
     
 #    ## bifurcation detection based on change in sign of determinant of augmented Jacobian
+#        ## from Allgower/Georg (1990, Theorem 8.1.14, p.79)
+#        ## does not work well because there can also be bifurcations without reversal of direction!
 #    if detJ_y * detJ_y_old < 0:
-    
+        
     ## bifurcation detection based on angle between consecutive tangents
+        ## work reasonably well 
+        ## bifurc_angle_min is crucial:
+            ## if too close to 180° => actual bifurcations may be undetected
+            ## if too far away from 180° => bifurcations may be falsely detected
     if angle > bifurc_angle_min:
         sign *= -1
         tangent *= -1
         if progress:
-            print('\nBifurcation point encountered at angle {0:0.2f}°. Direction swapped.'.format( angle ))
+            sys.stdout.write('\nBifurcation point encountered at angle {0:0.2f}°. Direction swapped.\n'.format( angle ))
+            sys.stdout.flush()
         angle = 180 - angle
+        sign_swapped = True
     
-    return sign, tangent, angle, detJ_y
+    return sign, tangent, angle, sign_swapped, detJ_y
 
 
 
 
-def y_corrector(y, H, J, J_y_pred, J_pinv, tangent, ds, sign, H_tol=1e-7, 
+def y_corrector(y, H, J, H_y, J_y_pred, J_pinv, tangent, ds, sign, H_tol=1e-7, 
                 corr_steps_max=20, corr_dist_max=0.3, corr_contr_max=0.3, detJratio_max=1.3):
     
     detJ_y_pred = np.linalg.det(np.vstack([J_y_pred, tangent]))
@@ -75,12 +91,12 @@ def y_corrector(y, H, J, J_y_pred, J_pinv, tangent, ds, sign, H_tol=1e-7,
     corr_contr_init = 0
     corr_step = 0
     
-    while np.max(np.abs(H(y))) > H_tol:
+    while np.max(np.abs(H_y)) > H_tol:
         
         corr_step += 1
         
         ## corrector step
-        vec = np.dot(J_pinv, H(y))
+        vec = np.dot(J_pinv, H_y)
         y = y - vec
         corr_dist_step = np.linalg.norm(vec)
         corr_dist_tot += corr_dist_step
@@ -89,6 +105,13 @@ def y_corrector(y, H, J, J_y_pred, J_pinv, tangent, ds, sign, H_tol=1e-7,
         corr_dist_old = corr_dist
         if corr_step == 2:
             corr_contr_init = corr_contr
+        
+        ## if corrector step leads to invalid point,
+        ## decrease step size and return to predictor step
+        H_y = H(y)
+        if np.isnan(H_y).sum() > 0:
+#            print('NaN in H(y)')
+            return y, J_y_pred, False, corr_step, corr_dist_tot, corr_contr_init, 'NaN in H(y)'
         
         ## if corrector step violates restriction on distance or contraction or number of steps,
         ## decrease step size and return to predictor step
@@ -101,6 +124,7 @@ def y_corrector(y, H, J, J_y_pred, J_pinv, tangent, ds, sign, H_tol=1e-7,
             if corr_step > corr_steps_max:
                 err_msg = err_msg + '\ncorr_step = {0} > corr_steps_max = {1};   '.format(corr_step, corr_steps_max)
             err_msg = err_msg + 'cond(J) = {0:0.0f}'.format( np.linalg.cond(J_y_pred) )
+#            print(err_msg)
             return y, J_y_pred, False, corr_step, corr_dist_tot, corr_contr_init, err_msg
     
     ## if determinant of augmented Jacobian changes too much during correction,
@@ -110,6 +134,7 @@ def y_corrector(y, H, J, J_y_pred, J_pinv, tangent, ds, sign, H_tol=1e-7,
     detJratio = abs(detJ_y) / abs(detJ_y_pred)
     if detJratio > detJratio_max or detJratio < 1/detJratio_max:
         err_msg = '\ndetJratio = {0:0.4f} not in [{1:0.2f}, {2:0.2f}]'.format(detJratio, 1/detJratio_max, detJratio_max)
+#        print(err_msg)
         return y, J_y, False, corr_step, corr_dist_tot, corr_contr_init, err_msg
     
     return y, J_y, True, corr_step, corr_dist_tot, corr_contr_init, ''
@@ -125,7 +150,13 @@ def update_parameters(s, ds, y_corr, y_old,
     
     ## update t, s, ds
     t = y_corr[-1]
-    step_dist = np.linalg.norm(y_corr-y_old)
+    t_diff = t - y_old[-1]
+    #step_dist = np.linalg.norm(y_corr-y_old)
+    #step_dist = np.linalg.norm( (y_corr-y_old) )
+    sigma_idx = np.zeros(y_corr.shape, dtype=np.bool)
+    sigma_idx[:sigma_count] = True   # sigma
+    sigma_idx[-1] = True             # t
+    step_dist = np.linalg.norm( (y_corr-y_old)[sigma_idx] )
     s += step_dist
     continue_tracking = True
     success = True
@@ -145,10 +176,11 @@ def update_parameters(s, ds, y_corr, y_old,
                     continue_tracking = False
             else:
                 ds = inflate(ds=ds, corr_steps=corr_steps, corr_dist_tot=corr_dist_tot, 
-                             corr_contr_init=corr_contr_init, ds_infl=ds_infl, ds_max=ds_max)
+                             corr_contr_init=corr_contr_init, t=t, t_target=t_target, 
+                             t_diff=t_diff, ds_infl=ds_infl, ds_max=ds_max)
         
         
-        ## convergence criterion: t -> t1
+        ## convergence criterion: t -> t_target
         else:
             
             ## case 1: t still in bound -> update and continue loop
@@ -156,12 +188,14 @@ def update_parameters(s, ds, y_corr, y_old,
             else: test_bool1 = t > t_target + t_tol                   ## decreasing t
             
             ## case 2: t too far -> use previous step with decreased step size
-            if t_target > t_init: test_bool2 = t > t_target + t_tol   ## increasing t
-            else: test_bool2 = t < t_target - t_tol                   ## decreasing t
+            ## (very rare due to ds <= |(t_target-t)/t_diff|)
+            if t_target > t_init: test_bool2 = t > t_target   ## increasing t
+            else: test_bool2 = t < t_target                   ## decreasing t
             
             if test_bool1:
                 ds = inflate(ds=ds, corr_steps=corr_steps, corr_dist_tot=corr_dist_tot, 
-                             corr_contr_init=corr_contr_init, ds_infl=ds_infl, ds_max=ds_max)
+                             corr_contr_init=corr_contr_init, t=t, t_target=t_target, 
+                             t_diff=t_diff, ds_infl=ds_infl, ds_max=ds_max)
                 y_old = y_corr.copy()
             
             elif test_bool2:
@@ -170,7 +204,7 @@ def update_parameters(s, ds, y_corr, y_old,
                 ds = np.abs(t - t_target)
                 y_corr = y_old.copy()
             
-            ## case 3: t_goal - t_tol <= t <= t_goal + t_tol -> done!
+            ## case 3: t_target - t_tol <= t <= t_target (for increasing t) -> done!
             else: 
                 continue_tracking = False
     
@@ -180,7 +214,8 @@ def update_parameters(s, ds, y_corr, y_old,
         continue_tracking = False
         success = False
         if progress: 
-            print('\nHomotopy continuation got stuck.' + err_msg)
+            sys.stdout.write('\nHomotopy continuation got stuck.' + err_msg)
+            sys.stdout.flush()
     
     
     return t, s, ds, y_corr.copy(), continue_tracking, success

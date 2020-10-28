@@ -54,8 +54,8 @@ transitionMatrices = [
                 ])
     ] * 3
 
-equilibrium = dsSolve(payoffMatrices, transitionMatrices, 
-                      discountFactors=0.95, plotPath=True)
+equilibrium = dsSolve(payoffMatrices, transitionMatrices, discountFactors=0.95, 
+                      implementationType='ct', plotPath=True)
 
 print(np.round(equilibrium['strategies'],3))
 # array([[[0.369 0.298 0.333]

@@ -54,6 +54,7 @@ for s in range(num_k):
 
 equilibrium = dsSolve(
         payoffMatrices, transitionMatrices, beta, 
+        implementationType='ct', 
         showProgress=True, plotPath=True)
 
 # Dynamic stochastic game with 13 states, 1 players and 109 actions.

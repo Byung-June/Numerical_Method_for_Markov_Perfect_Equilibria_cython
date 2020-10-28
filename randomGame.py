@@ -24,6 +24,7 @@ discountFactors = np.random.uniform(low=delta_min, high=delta_max, size=num_p)
 
 
 equilibrium = dsSolve(payoffMatrices, transitionMatrices, discountFactors,
+                      implementationType='ct', 
                       showProgress=True, plotPath=True)
 
 print(np.round(equilibrium['strategies'], 3))

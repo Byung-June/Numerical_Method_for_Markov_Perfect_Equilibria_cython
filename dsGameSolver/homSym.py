@@ -1,8 +1,8 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 
 """
 dsGameSolver: Computing Markov perfect equilibria of dynamic stochastic games.
-Copyright (C) 2019  Steffen Eibelshäuser & David Poensgen
+Copyright (C) 2018-2020  Steffen Eibelshäuser & David Poensgen
 
 This program is free software: you can redistribute it 
 and/or modify it under the terms of the MIT License.
@@ -14,6 +14,38 @@ and/or modify it under the terms of the MIT License.
 
 
 import numpy as np
+
+
+
+"""
+
+num_s = game.num_states
+num_p = game.num_players
+nums_a = game.nums_actions
+
+T_y2beta = game.T_y2beta
+deltas = game.discountFactors
+
+beta_test = np.random.uniform(size=1)
+V_test = np.random.uniform(size=1)
+t_test = np.random.uniform(size=1)
+
+y_test = np.array( [beta_test[0]]*nums_a.sum() + [V_test[0]]*num_s*num_p + [t_test[0]] )
+
+H_test = game.H_qre_nontransformed_np(y_test)
+
+"""
+
+
+def invperm(pi1):
+    pi2 = np.empty_like(pi1)
+    pi2[pi1] = np.arange(len(pi1))
+    return pi2
+
+def find_map(arr1, arr2):
+    pi1 = np.argsort(arr1)
+    pi2 = np.argsort(arr2)
+    return pi2[invperm(pi1)]
 
 
 
@@ -59,9 +91,9 @@ def symmetryPairs(H_test, T_y2beta, deltas, num_s, num_p, nums_a):
                         if np.allclose(np.sort(H_strat1.ravel()), np.sort(H_strat2.ravel()), equal_nan=True) and np.allclose(H_val1, H_val2):
                             symPairs_temp.append( ((s1,p1),(s2,p2)) )
             
-            ## check whether p1 and p2 are symmetric across all states
-            if len(symPairs_temp) == num_s:
-                symPairs.extend(symPairs_temp)
+                ## check whether p1 and p2 are symmetric across all states
+                if len(symPairs_temp) == num_s:
+                    symPairs.extend(symPairs_temp)
     
     
     return symPairs

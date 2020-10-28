@@ -2,17 +2,27 @@
 
 """
 dsGameSolver: Computing Markov perfect equilibria of dynamic stochastic games.
-Copyright (C) 2019  Steffen Eibelshäuser & David Poensgen
+Copyright (C) 2018-2020  Steffen Eibelshäuser & David Poensgen
 
 This program is free software: you can redistribute it 
 and/or modify it under the terms of the MIT License.
 """
 
+
+
+
+
+
 import numpy as np
 
 
-def inputCorrect(payoffMatrices, transitionMatrices=None, discountFactors=0, symmetryPairs=[]):
 
+
+
+
+def inputCorrect(payoffMatrices, transitionMatrices=None, discountFactors=0, symmetryPairs=[]):
+    
+    
     ## check payoffMatrices
     
     if type(payoffMatrices) != type([]):
